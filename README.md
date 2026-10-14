@@ -1,3 +1,22 @@
+# Hi-MKGC
+
+## Soft Prompt-only release
+
+The restored early multimodal Soft Prompt implementation is in
+[`softprompt_only/`](softprompt_only/). Start with its
+[installation, training and evaluation instructions](softprompt_only/README.rst).
+
+This version uses image-conditioned prompts in BERT layers **1–6** and
+structure-conditioned prompts in layers **7–12**, with text states propagated
+through all 12 layers. It does **not** include ReLook experts, routing,
+score-level visual refinement, the later query gate, or model ensembling.
+
+The original root-level files and existing data archives are retained unchanged
+below for history; run the new release **from `softprompt_only/`**. The new
+upload contains code and tests only, not new datasets or model weights.
+
+## Original repository instructions (historical)
+
 - Commands for reproducing:
 - Install all the requirements from `./requirements.txt`
 - Unzip data.zip and img_data.zip
