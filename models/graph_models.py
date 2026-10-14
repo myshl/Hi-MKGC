@@ -18,7 +18,9 @@ class Null(nn.Module):
         return logits
 
     def score_fn(self, pred, sample_embed, bias):
+        # pred -- .shape: (batch_size, 1, embed_dim)
         pred = pred.unsqueeze(1)
+        # scores -- .shape: (batch_size, n_samples)
         scores = torch.sum(pred * sample_embed, dim=-1)
         return scores
 
@@ -33,11 +35,17 @@ class TransE(nn.Module):
     def forward(self, head_emb, rel_emb):
         return head_emb + rel_emb
 
+
+    # pred .shape: (batch_size, embed_dim), ent_embed .shape: (n_ent, embed_dim)
     def get_logits(self, pred, ent_embed):
+        # logits .shape: (batch_size, n_ent, embed_dim)
         logits = pred.unsqueeze(1) - ent_embed
+        # logits .shape: (batch_size, n_ent)
         logits = self.configs.loss_gamma - torch.norm(logits, p=1, dim=2)
         return logits
 
+    # pred -- .shape: (batch_size, embed_dim)
+    # sample_embed .shape: (batch_size, n_samples, embed_dim)
     def score_fn(self, pred, sample_embed, bias):
         scores = self.configs.loss_gamma - torch.norm(pred.unsqueeze(1) - sample_embed, p=1, dim=2)
         return scores
@@ -57,8 +65,12 @@ class DistMult(nn.Module):
         logits += self.bias.expand_as(logits)
         return logits
 
+    # pred -- .shape: (batch_size, embed_dim)
+    # sample_embed .shape: (batch_size, n_samples, embed_dim)
     def score_fn(self, pred, sample_embed, bias):
+        # pred -- .shape: (batch_size, 1, embed_dim)
         pred = pred.unsqueeze(1)
+        # scores -- .shape: (batch_size, n_samples)
         scores = torch.sum(pred * sample_embed, dim=-1) + bias
         return scores
 
@@ -103,6 +115,7 @@ class ConvE(nn.Module):
         x = self.hidden_drop2(x)
         x = self.bn2(x)
         x = F.relu(x)
+        # score = torch.sigmoid(x)
         return x
 
     def get_logits(self, pred, ent_embed):
@@ -110,8 +123,12 @@ class ConvE(nn.Module):
         logits += self.bias.expand_as(logits)
         return logits
 
+    # pred -- .shape: (batch_size, embed_dim)
+    # sample_embed .shape: (batch_size, n_samples, embed_dim)
     def score_fn(self, pred, sample_embed, bias):
+        # pred -- .shape: (batch_size, 1, embed_dim)
         pred = pred.unsqueeze(1)
+        # scores -- .shape: (batch_size, n_samples)
         scores = torch.sum(pred * sample_embed, dim=-1) + bias
         return scores
 
@@ -142,11 +159,17 @@ class RotatE(nn.Module):
         logits = self.configs.loss_gamma - self.norm_nonnegative(diff_abs, dim=2, p=1.)
         return logits
 
+    # pred[0], pred[1] -- .shape: (batch_size, embed_dim // 2)
+    # sample_embed .shape: (batch_size, n_samples, embed_dim)
+    # sample_ids .shape: (batch_size, n_samples)
     def score_fn(self, pred, sample_embed, bias):
+        # sample_emb_re, sample_emb_im -- .shape: (batch_szie, n_samples, embed_dim // 2)
         sample_emb_re, sample_emb_im = torch.chunk(sample_embed, 2, dim=2)
+        # diff_re, diff_im -- .shape: (batch_size, n_samples, embed_dim // 2)
         diff_re, diff_im = self.pairwise_diff_complex(
             pred[0], pred[1], sample_emb_re, sample_emb_im
         )
+        # diff_abs -- .shape: (batch_size, n_samples, embed_dim)
         diff_abs = self.abs_complex(diff_re, diff_im)
         logits = self.configs.loss_gamma - self.norm_nonnegative(diff_abs, dim=2, p=1.)
         return logits
@@ -154,26 +177,35 @@ class RotatE(nn.Module):
 
     @staticmethod
     def hadamard_complex(x_re, x_im, y_re, y_im):
+        "Hadamard product for complex vectors"
         result_re = x_re * y_re - x_im * y_im
         result_im = x_re * y_im + x_im * y_re
         return result_re, result_im
 
 
     def pairwise_diff_complex(self, x_re, x_im, y_re, y_im):
+        "Pairwise difference of complex vectors"
         return self.pairwise_diff(x_re, y_re), self.pairwise_diff(x_im, y_im)
 
     @staticmethod
     def pairwise_diff(X, Y):
+        """Compute pairwise difference of rows of X and Y.
+
+        Returns tensor of shape len(X) x len(Y) x dim."""
         return X.unsqueeze(1) - Y
 
     @staticmethod
     def abs_complex(x_re, x_im):
-        x_re_im = torch.stack((x_re, x_im), dim=0)
-        return torch.norm(x_re_im, dim=0)
+        "Compute magnitude of given complex numbers"
+        x_re_im = torch.stack((x_re, x_im), dim=0)  # dim0: real, imaginary
+        return torch.norm(x_re_im, dim=0)  # sqrt(real^2+imaginary^2)
 
     @staticmethod
     def norm_nonnegative(x, dim: int, p: float):
+        "Computes lp-norm along dim assuming that all inputs are non-negative."
         if p == 1.0:
+            # speed up things for this common case. We known that the inputs are
+            # non-negative here.
             return torch.sum(x, dim=dim)
         else:
             return torch.norm(x, dim=dim, p=p)

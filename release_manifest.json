@@ -1,0 +1,79 @@
+{
+  "release": "softprompt-only-20261014",
+  "source_directory": "CSProm-KG-main-824",
+  "repository_layout": "root",
+  "supersedes_layout_commit": "09d9a55cbb69d7172652c785da9faa56a5277605",
+  "original_repository_head": "22b2f7ceaddc1d941716db1d1b7dd6a8be90541a",
+  "architecture": {
+    "backbone": "frozen BERT-base-uncased",
+    "image_prompt_layers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "structural_prompt_layers": [
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "schedule": "concatenate visual then structural depth slices; replace prompt prefix each layer",
+    "decoder": "ConvE",
+    "embedding_dim": 256
+  },
+  "removed_later_branches": [
+    "query-adaptive prompt gate",
+    "hard-Top-k auxiliary loss"
+  ],
+  "excluded": [
+    "ReLook experts/adapters/routers/visual score refinement",
+    "ensembles",
+    "new data/weights"
+  ],
+  "packaging_changes": [
+    "configurable feature directory and Freebase filename fallback",
+    "strict checkpoint loading",
+    "explicit validation/test selection",
+    "missing-checkpoint error",
+    "portable shell examples and CPU tests"
+  ],
+  "evaluation": "Both directions, all entities, train+valid+test filtering; historical torch.sort ties",
+  "objectives": "Historical smoothed CE plus optional historical LAR; no objective correction in this release",
+  "verification": {
+    "cpu_unit_tests": 5,
+    "forward_max_abs_error": 0.0,
+    "ce_loss_abs_error": 0.0,
+    "strict_state_dictionary_compatible": true,
+    "comparison": "Synthetic 12-layer BERT fixture; original 824 with query_gate=False and topk_weight=0",
+    "complete_benchmark_rerun": false
+  },
+  "original_source_sha256": {
+    "main.py": "baafd88382468fb6444197997b4029854f77709d2047c8a531ba5eed442b92cb",
+    "helper.py": "293208ce2888ad98ee3e5218d02edf77c5c3c90f9ec798108f2dedd8f3650dbf",
+    "kgc_data.py": "77da46d3a5fc33781d87e5000dc047b98d69688a938416f811a284a06c63095e",
+    "callbacks.py": "3eb6a53f57657b4788ce8e8251f888adf8156658ee92c218a9b46262ba5154c8",
+    "requirements.txt": "f8d3bed0901c2702f9f1215107a387ff1b8bddc327ac401ceaf6b5ef4a27d3fa",
+    "models/P_model.py": "7ee2d775099685fb5757f81e66ea24edb22ac058fbb1ab624a266a6f40d8a7f6",
+    "models/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "models/bert_for_layerwise.py": "3a00cf7812e3826904ce065a915d45683a2168ab73de522843816581a146649c",
+    "models/graph_models.py": "98785cd703d9641dda9731226cf5323aaebe01e3dc8e1cd3db1b6e27c3a78f10",
+    "models/prompter.py": "a0c432cb79032cb29158433791432c6d9a903d05ee61f5768fed7eea212e2796"
+  },
+  "restored_source_sha256": {
+    "main.py": "5b0f475b756a71cafdf01272b155022154dbbaff964a1ff4f9b14e9d7dd79619",
+    "helper.py": "293208ce2888ad98ee3e5218d02edf77c5c3c90f9ec798108f2dedd8f3650dbf",
+    "kgc_data.py": "77da46d3a5fc33781d87e5000dc047b98d69688a938416f811a284a06c63095e",
+    "callbacks.py": "3eb6a53f57657b4788ce8e8251f888adf8156658ee92c218a9b46262ba5154c8",
+    "requirements.txt": "f8d3bed0901c2702f9f1215107a387ff1b8bddc327ac401ceaf6b5ef4a27d3fa",
+    "models/P_model.py": "eea3ff81d919a1b912189ebeab09b037873a3dfcc4ed8879c5b0653670d9894e",
+    "models/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "models/bert_for_layerwise.py": "3a00cf7812e3826904ce065a915d45683a2168ab73de522843816581a146649c",
+    "models/graph_models.py": "98785cd703d9641dda9731226cf5323aaebe01e3dc8e1cd3db1b6e27c3a78f10",
+    "models/prompter.py": "a0c432cb79032cb29158433791432c6d9a903d05ee61f5768fed7eea212e2796"
+  }
+}

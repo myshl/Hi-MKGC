@@ -17,32 +17,48 @@ transformers.logging.set_verbosity_error()
 
 
 def main():
+    if configs.save_dir == '':
+        if configs.jobid == 'XXXXXXXX':
+            configs.save_dir = os.path.join('./checkpoint', configs.dataset + '-' + datetime.now().strftime('%Y-%m-%d %H-%M-%S'))
+        else:
+            configs.save_dir = os.path.join('./checkpoint', configs.jobid)
     os.makedirs(configs.save_dir, exist_ok=True)
     trainer_params = {
-        'max_epochs': configs.epochs, 
-        'logger': False, 
-        'num_sanity_val_steps': 0,  
+        'max_epochs': configs.epochs,  # 1000
+        'logger': False,  # TensorBoardLogger
+        'num_sanity_val_steps': 0,  # 2
         'check_val_every_n_epoch': configs.check_val_every_n_epoch,
         'enable_progress_bar': True,
     }
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and configs.gpu != '-1':
         trainer_params['devices'] = [int(configs.gpu)]
         trainer_params['accelerator'] = 'gpu'
     else:
         trainer_params['accelerator'] = 'cpu'
 
-    print(trainer_params['devices'])
-    print(trainer_params['accelerator'])
+    print('devices:', trainer_params.get('devices', 'auto'))
+    print('accelerator:', trainer_params['accelerator'])
+
 
     if configs.accumulate_grad_batches > 1:
         trainer_params['accumulate_grad_batches'] = configs.accumulate_grad_batches
     if configs.use_fp16:
         trainer_params['precision'] = 16
+    if configs.limit_train_batches > 0:
+        trainer_params['limit_train_batches'] = configs.limit_train_batches
+    if configs.limit_val_batches > 0:
+        trainer_params['limit_val_batches'] = configs.limit_val_batches
+    if configs.limit_test_batches > 0:
+        trainer_params['limit_test_batches'] = configs.limit_test_batches
 
+    ## read triples
     train = read(configs, configs.dataset_path, configs.dataset, 'train2id.txt')
     valid = read(configs, configs.dataset_path, configs.dataset, 'valid2id.txt')
     test = read(configs, configs.dataset_path, configs.dataset, 'test2id.txt')
     all_triples = train + valid + test
+
+    ## construct ground truth dictionary
+    # ground truth .shape: dict, example: {hr_str_key1: [t_id11, t_id12, ...], (hr_str_key2: [t_id21, t_id22, ...], ...}
     train_tail_gt, train_head_gt = get_gt(configs, train)
     all_tail_gt, all_head_gt = get_gt(configs, all_triples)
 
@@ -52,6 +68,7 @@ def main():
         'all_tail_gt': all_tail_gt,
         'all_head_gt': all_head_gt,
     }
+
     ent_names, rel_names = read_name(configs, configs.dataset_path, configs.dataset)
     ent_descs = read_file(configs, configs.dataset_path, configs.dataset, 'entityid2description.txt', 'desc')
     tok = BertTokenizer.from_pretrained(configs.pretrained_model, add_prefix_space=False)
@@ -61,8 +78,11 @@ def main():
         'rel_names': rel_names,
         'ent_descs': ent_descs,
     }
+    ## construct datamodule
     datamodule = KGCDataModule(configs, train, valid, test, text_dict, tok, gt)
     print('datamodule construction done.', flush=True)
+
+    ## construct trainer
     checkpoint_callback = ModelCheckpoint(
         monitor='val_mrr',
         dirpath=configs.save_dir,
@@ -75,6 +95,8 @@ def main():
         printing_callback,
     ]
     trainer = pl.Trainer(**trainer_params)
+
+    ## construct model parameters
     kw_args = {
         'text_dict': text_dict,
         'gt': gt,
@@ -84,7 +106,7 @@ def main():
         if configs.continue_path == '':
             model = KGCPromptTuner(configs, **kw_args)
         else:
-            model = KGCPromptTuner.load_from_checkpoint(configs.continue_path, strict=False, configs=configs, **kw_args)
+            model = KGCPromptTuner.load_from_checkpoint(configs.continue_path, strict=True, configs=configs, **kw_args)
         print('model construction done.', flush=True)
         trainable_params, non_trainable_params = 0, 0
         for name, params in model.named_parameters():
@@ -96,11 +118,16 @@ def main():
         print('trainable params:', trainable_params, 'non trainable params:', non_trainable_params)
         trainer.fit(model, datamodule)
         model_path = checkpoint_callback.best_model_path
+        if not model_path:
+            raise RuntimeError('No validation checkpoint was produced; use a validation interval within the training budget.')
     else:
         model_path = configs.model_path
     print('model_path:', model_path, flush=True)
-    model = KGCPromptTuner.load_from_checkpoint(model_path, strict=False, configs=configs, **kw_args)
-    trainer.test(model, dataloaders=datamodule)
+    model = KGCPromptTuner.load_from_checkpoint(model_path, strict=True, configs=configs, **kw_args)
+    if configs.eval_split == 'valid':
+        trainer.validate(model, datamodule=datamodule)
+    else:
+        trainer.test(model, datamodule=datamodule)
 
 
 if __name__ == '__main__':
@@ -110,6 +137,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-dataset_path', type=str, default='./data/processed')
+    parser.add_argument('-feature_dir', type=str, default='./img_data',
+                        help='Directory containing image and structural feature pickle files')
     parser.add_argument('-jobid', type=str, default='XXXXXXXX')
     parser.add_argument('-dataset', dest='dataset', default='WN18RR',
                         help='Dataset to use, default: InferWiki16k')
@@ -118,7 +147,7 @@ if __name__ == '__main__':
     parser.add_argument('-num_workers', type=int, default=4, help='Number of processes to construct batches')
     parser.add_argument('-save_dir', type=str, default='', help='')
 
-    parser.add_argument('-pretrained_model', type=str, default='t5-base', help='')
+    parser.add_argument('-pretrained_model', type=str, default='bert-base-uncased', help='BERT model name or local path')
     parser.add_argument('-batch_size', default=128, type=int, help='Batch size')
     parser.add_argument('-val_batch_size', default=128, type=int, help='Batch size')
     parser.add_argument('-src_max_length', default=512, type=int, help='')
@@ -126,9 +155,13 @@ if __name__ == '__main__':
     parser.add_argument('-lr', type=float, default=0.001, help='Starting Learning Rate')
 
     parser.add_argument('-model_path', dest='model_path', default='', help='The path for reloading models')
+    parser.add_argument('-eval_split', choices=['valid', 'test'], default='test',
+                        help='Split evaluated after loading the selected checkpoint')
     parser.add_argument('-desc_max_length', default=0, type=int, help='')
     parser.add_argument('-prompt_length', default=0, type=int, help='')
     parser.add_argument('-embed_dim', default=0, type=int, help='')
+
+    # ConvE specific hyperparameters
     parser.add_argument('-hid_drop', dest='hid_drop', default=0.3, type=float, help='Dropout after GCN')
     parser.add_argument('-hid_drop2', dest='hid_drop2', default=0.3, type=float, help='ConvE: Hidden dropout')
     parser.add_argument('-feat_drop', dest='feat_drop', default=0.3, type=float, help='ConvE: Feature Dropout')
@@ -156,10 +189,18 @@ if __name__ == '__main__':
     parser.add_argument('-use_fp16', action='store_true', help='')
     parser.add_argument('-prompt_hidden_dim', default=-1, type=int, help='')
     parser.add_argument('-alpha_step', default=0., type=float, help='')
+    parser.add_argument('-limit_train_batches', default=-1, type=int,
+                        help='Limit training batches for smoke tests; -1 uses all batches')
+    parser.add_argument('-limit_val_batches', default=-1, type=int,
+                        help='Limit validation batches for smoke tests; -1 uses all batches')
+    parser.add_argument('-limit_test_batches', default=-1, type=int,
+                        help='Limit test batches for smoke tests; -1 uses all batches')
 
-    parser.add_argument('-visualize_embeddings', default=True, type=bool, help='')
+    parser.add_argument('-visualize_embeddings', action='store_true',
+                        help='Generate embedding visualizations during validation')
     parser.add_argument('-embedding_dim_reduction', default='tSNE', type=str, help='')
     parser.add_argument('-img_save_dir', default='./', type=str, help='')
+
 
     configs = parser.parse_args()
     n_ent = get_num(configs.dataset_path, configs.dataset, 'entity')

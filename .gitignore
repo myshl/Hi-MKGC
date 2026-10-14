@@ -16,9 +16,9 @@ __pycache__/
 *.safetensors
 *.zip
 *.log
-softprompt_only/data/
-softprompt_only/img_data/
-softprompt_only/model_path/
-softprompt_only/checkpoint/
-softprompt_only/runs/
-softprompt_only/.cuda_lib/
+data/
+img_data/
+model_path/
+checkpoint/
+runs/
+.cuda_lib/
