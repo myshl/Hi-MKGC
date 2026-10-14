@@ -161,20 +161,3 @@ Such a limited run is a smoke test, not a full reported result. A full training
 run needs appropriate GPU memory; the scripts do not silently alter batches
 or the model after an out-of-memory error. Set ``SOFTPROMPT_PYTHON`` to an
 existing compatible Python interpreter if needed.
-
-Release changes and attribution
--------------------------------
-
-The active baseline path is preserved. Packaging adds configurable feature
-locations, the Freebase filename fallback, strict checkpoint loading, an
-explicit validation/test switch, a clear missing-checkpoint error, tests and
-documentation. It removes the later optional query gate and Top-k objective.
-The original Prompter and layer-wise encoder files are preserved byte-for-byte.
-
-This code derives from the user's early multimodal extension of CSProm-KG.
-The inherited helper retains its fastai attribution; the Transformer code
-uses Hugging Face Transformers and PyTorch. No new blanket license is assigned
-to upstream code, pretrained models or data. This implementation replaces the
-old root-level code and the temporary ``softprompt_only/`` layout. Old code,
-data archives, bytecode caches and the placeholder checkpoint have been removed
-from the current tree; previous commits remain available in Git history.
